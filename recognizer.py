@@ -28,14 +28,14 @@ def elastic_transform(image, alpha, sigma, random_state=None):
     distored_image = map_coordinates(image, indices, order=1, mode='reflect')
     return distored_image.reshape(image.shape)
 
-print 'Loading training data...'
+print('Loading training data...')
 
 # train_data_set = np.loadtxt('debug.csv', delimiter=',', skiprows=1, dtype=int)
 train_data_set = np.loadtxt('train.csv', delimiter=',', skiprows=1, dtype=int)
 Y = to_categorical(train_data_set[:, 0], 10)
 X = train_data_set[:,1:].reshape((train_data_set.shape[0], 1, 28, 28)).astype('float') / 255
 
-print 'Generating additional training data...'
+print('Generating additional training data...')
 
 items_num = X.shape[0]
 train_items_num = int(0.95 * items_num) 
@@ -50,7 +50,7 @@ for i in range(train_items_num):
 Y_val = Y[train_items_num:]
 X_val = X[train_items_num:]
 
-print 'Loading test data...'
+print('Loading test data...')
 
 # predict_data_set = np.loadtxt('debug_test.csv', delimiter=',', skiprows=1, dtype=int)
 predict_data_set = np.loadtxt('test.csv', delimiter=',', skiprows=1, dtype=int)
