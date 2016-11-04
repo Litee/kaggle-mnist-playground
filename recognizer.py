@@ -28,9 +28,19 @@ def elastic_transform(image, alpha, sigma, random_state=None):
     distored_image = map_coordinates(image, indices, order=1, mode='reflect')
     return distored_image.reshape(image.shape)
 
+def predict_ensemble(models, input_data, batch_size):
+    models_num = len(models)
+    predictions = np.empty((models_num, input_data.shape[0], 10))
+    for i in range(0, models_num):
+        model = models[i][0]
+        predictions[i] = model.predict(input_data, batch_size=batch_size, verbose=1)
+    return predictions.mean(axis=1)
+
+np.random.seed(12345)
+
 print('Loading training data...')
 
-# train_data_set = np.loadtxt('debug.csv', delimiter=',', skiprows=1, dtype=int)
+# train_data_set = np.loadtxt('train_debug.csv', delimiter=',', skiprows=1, dtype=int)
 train_data_set = np.loadtxt('train.csv', delimiter=',', skiprows=1, dtype=int)
 Y = to_categorical(train_data_set[:, 0], 10)
 X = train_data_set[:,1:].reshape((train_data_set.shape[0], 1, 28, 28)).astype('float') / 255
@@ -38,8 +48,8 @@ X = train_data_set[:,1:].reshape((train_data_set.shape[0], 1, 28, 28)).astype('f
 print('Generating additional training data...')
 
 items_num = X.shape[0]
-train_items_num = int(0.95 * items_num) 
-training_set_multiplier = 10
+train_items_num = int(0.8 * items_num)
+training_set_multiplier = 5
 Y_train = Y[0:train_items_num].repeat(training_set_multiplier, axis=0)
 X_train = X[0:train_items_num].repeat(training_set_multiplier, axis=0)
 for i in range(train_items_num):
@@ -52,7 +62,7 @@ X_val = X[train_items_num:]
 
 print('Loading test data...')
 
-# predict_data_set = np.loadtxt('debug_test.csv', delimiter=',', skiprows=1, dtype=int)
+# predict_data_set = np.loadtxt('test_debug.csv', delimiter=',', skiprows=1, dtype=int)
 predict_data_set = np.loadtxt('test.csv', delimiter=',', skiprows=1, dtype=int)
 X_predict = predict_data_set.reshape((predict_data_set.shape[0], 1, 28, 28)).astype('float') / 255
 
@@ -71,47 +81,58 @@ print('All data loaded!')
 #     plt.axis('off')
 # plt.show()
 
-model = Sequential()
+ensemble_models_num = 5
+models = []
 
-model.add(Convolution2D(32, 3, 3, border_mode='valid', input_shape=(1, 28, 28), activation='relu')) 
-model.add(Dropout(0.3))
+# build an ensemble of models
+for model_idx in range(0, ensemble_models_num):
 
-model.add(Convolution2D(64, 3, 3, activation='relu', subsample=(2, 2))) 
-model.add(Dropout(0.3))
+    model = Sequential()
 
-model.add(Convolution2D(128, 3, 3, activation='relu', subsample=(2, 2))) 
-model.add(Dropout(0.3))
+    model.add(Convolution2D(32, 3, 3, border_mode='valid', input_shape=(1, 28, 28), activation='relu'))
+    model.add(Dropout(0.3))
 
-model.add(Convolution2D(256, 3, 3, activation='relu')) 
-model.add(Dropout(0.3))
+    model.add(Convolution2D(64, 3, 3, activation='relu', subsample=(2, 2)))
+    model.add(Dropout(0.3))
 
-model.add(Convolution2D(512, 3, 3, activation='relu')) 
-model.add(Dropout(0.3))
+    model.add(Convolution2D(128, 3, 3, activation='relu', subsample=(2, 2)))
+    model.add(Dropout(0.3))
 
-model.add(Convolution2D(128, 1, 1, activation='relu')) 
-model.add(Dropout(0.3))
+    model.add(Convolution2D(256, 3, 3, activation='relu'))
+    model.add(Dropout(0.3))
 
-model.add(Flatten())
+    model.add(Convolution2D(512, 3, 3, activation='relu'))
+    model.add(Dropout(0.3))
 
-model.add(Dense(10, activation='softmax'))
+    model.add(Convolution2D(128, 1, 1, activation='relu'))
+    model.add(Dropout(0.3))
 
-model.summary()
+    model.add(Flatten())
 
-model.compile(loss='categorical_crossentropy', optimizer='adadelta')
+    model.add(Dense(10, activation='softmax'))
 
-batch_size = 32
-early_stopping = EarlyStopping(monitor='val_loss', patience=5)
-model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=50, verbose=1, validation_data=(X_val, Y_val), callbacks=[early_stopping])
+    if model_idx == 0:
+        model.summary()
 
-score = model.evaluate(X_val, Y_val, verbose=1, batch_size=batch_size)
-print('Test score:', score)
+    model.compile(loss='categorical_crossentropy', optimizer='adadelta')
 
-predictions = model.predict(X_predict, batch_size=batch_size, verbose=1)
+    batch_size = 64
+    early_stopping = EarlyStopping(monitor='val_loss', patience=3)
+    model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=3, verbose=1, validation_data=(X_val, Y_val), callbacks=[early_stopping])
+
+    score = model.evaluate(X_val, Y_val, verbose=1, batch_size=batch_size)
+    print('Test score:', score)
+
+    models.append([model, score])
+
+# predict test data 
+predictions = predict_ensemble(models, X_predict, batch_size)
 class_predictions = predictions.argmax(axis=1)
 
 np.savetxt('submission.csv', np.stack((np.arange(class_predictions.shape[0]) + 1, class_predictions), axis = -1), header='ImageId,Label', delimiter=',', fmt='%1i', comments='')
 
-predictions = model.predict(X_val, batch_size=batch_size, verbose=1)
+# review misidentified numbers from validation set
+predictions = predict_ensemble(models, X_val, batch_size)
 class_predictions = predictions.argmax(axis=1)
 Y_val_class = Y_val.argmax(axis=1)
 
