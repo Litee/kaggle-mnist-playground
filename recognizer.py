@@ -97,14 +97,14 @@ for model_idx in range(0, ensemble_models_num):
 
     total_items_num = X.shape[0]
     train_items_num = int(0.8 * total_items_num)
-    training_set_multiplier = 10
+    training_set_multiplier = 5
     Y_train = Y[0:train_items_num].repeat(training_set_multiplier, axis=0)
     X_train = X[0:train_items_num].repeat(training_set_multiplier, axis=0)
     for i in range(train_items_num):
         for j in range(1, training_set_multiplier):
             x = X_train[i * training_set_multiplier]
             # TODO Get rid of double re-shape
-            X_train[i * training_set_multiplier + j] = skimage.util.random_noise(elastic_transform(x.reshape((28, 28)), 28, np.random.uniform(28 * 0.15, 28 * 0.15)), 's&p').reshape((1, 28, 28))
+            X_train[i * training_set_multiplier + j] = skimage.util.random_noise(elastic_transform(x.reshape((28, 28)), 28, np.random.uniform(28 * 0.14, 28 * 0.14)), 's&p', amount=0.1).reshape((1, 28, 28))
     Y_val = Y[train_items_num:]
     X_val = X[train_items_num:]
 
